@@ -1,10 +1,13 @@
 from web3 import Web3
 from models import Transaction, db
+from memory_manager import MemoryManager
+from datetime import datetime
 
 class TransactionExecutor:
     def __init__(self, wallet_manager):
         self.w3 = Web3(Web3.HTTPProvider('https://api.avax.network/ext/bc/C/rpc'))
         self.wallet_manager = wallet_manager
+        self.memory_manager = MemoryManager()
         
     def execute_transaction(self, transaction_data):
         """Execute a transaction based on AI decision"""
@@ -21,14 +24,23 @@ class TransactionExecutor:
             # Wait for transaction receipt
             tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
             
-            # Record transaction
-            self._record_transaction(tx_hash.hex(), tx_receipt, transaction_data)
+            # Record transaction and update pattern confidence
+            tx_hash_hex = tx_hash.hex()
+            self._record_transaction(tx_hash_hex, tx_receipt, transaction_data)
+            
+            # Update pattern confidence on success
+            pattern_key = f"{transaction_data['type']}_{datetime.utcnow().strftime('%Y%m')}"
+            self.memory_manager.update_pattern_confidence('transaction_pattern', pattern_key, True)
             
             return tx_hash.hex()
             
         except Exception as e:
             print(f"Error executing transaction: {str(e)}")
             self._record_failed_transaction(str(e), transaction_data)
+            
+            # Update pattern confidence on failure
+            pattern_key = f"{transaction_data['type']}_{datetime.utcnow().strftime('%Y%m')}"
+            self.memory_manager.update_pattern_confidence('transaction_pattern', pattern_key, False)
             return None
             
     def _prepare_transaction(self, transaction_data):
