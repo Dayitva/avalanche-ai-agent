@@ -1,0 +1,40 @@
+/* Custom styles */
+.card {
+    margin-bottom: 1.5rem;
+}
+
+.badge {
+    font-size: 0.8rem;
+    padding: 0.35em 0.65em;
+}
+
+#wallet-balance {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0;
+    color: var(--bs-info);
+}
+
+.table {
+    margin-bottom: 0;
+}
+
+.table td, .table th {
+    vertical-align: middle;
+}
+
+.navbar {
+    margin-bottom: 2rem;
+}
+
+.card-title {
+    margin-bottom: 1.5rem;
+}
+
+#performanceChart {
+    min-height: 300px;
+}
+
+.text-muted {
+    font-size: 0.875rem;
+}
