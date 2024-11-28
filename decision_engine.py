@@ -62,9 +62,24 @@ class DecisionEngine:
             
     def _prepare_decision_request(self, chain_data, patterns=None, preferences=None):
         """Prepare the decision request with historical context"""
-        # Get default or stored risk parameters
-        risk_params = (preferences[0]['value'] if preferences 
-                      else {'risk_tolerance': 'medium', 'min_yield': 5.0})
+        from base_models import RiskParameter
+        
+        # Get current risk parameters
+        risk_params = {}
+        try:
+            active_params = RiskParameter.query.filter_by(active=True).all()
+            for param in active_params:
+                risk_params[param.parameter_type] = param.value
+        except Exception as e:
+            print(f"Error fetching risk parameters: {str(e)}")
+            # Use defaults if DB query fails
+            risk_params = {
+                'max_slippage': 1.0,
+                'min_liquidity': 100000,
+                'max_gas_multiplier': 1.5,
+                'min_profit_threshold': 0.5,
+                'max_exposure_percentage': 20.0
+            }
         
         # Calculate success patterns
         successful_patterns = []
@@ -80,12 +95,16 @@ class DecisionEngine:
                     "price": chain_data['market_data']['avalanche-2']['usd'],
                     "yields": chain_data['yields']
                 },
-                "historical_patterns": successful_patterns
+                "historical_patterns": successful_patterns,
+                "liquidity_data": chain_data.get('liquidity_data', {})
             },
             "parameters": {
-                "risk_tolerance": risk_params.get('risk_tolerance', 'medium'),
-                "min_yield": risk_params.get('min_yield', 5.0),
-                "max_gas_price": chain_data['gas_price'] * 1.5
+                "max_slippage": risk_params.get('max_slippage', 1.0),
+                "min_liquidity": risk_params.get('min_liquidity', 100000),
+                "max_gas_multiplier": risk_params.get('max_gas_multiplier', 1.5),
+                "min_profit_threshold": risk_params.get('min_profit_threshold', 0.5),
+                "max_exposure_percentage": risk_params.get('max_exposure_percentage', 20.0),
+                "current_gas_price": chain_data['gas_price']
             }
         }
 

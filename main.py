@@ -51,6 +51,10 @@ if __name__ == "__main__":
             # Initialize chains
             initialize_default_chains()
             
+            # Initialize risk parameters
+            from initialize_risk_params import initialize_risk_parameters
+            initialize_risk_parameters()
+            
             # Initialize wallet
             if not initialize_wallet(app):
                 print("Failed to initialize wallet", file=sys.stderr)

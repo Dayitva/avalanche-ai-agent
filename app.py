@@ -1,9 +1,9 @@
 from flask import Flask, jsonify, request, render_template
-from base_models import db, Chain, WalletConfig, Transaction, Memory, AIDecision, Contract
+from base_models import db, Chain, WalletConfig, Transaction, Memory, AIDecision, Contract, RiskParameter
 from apscheduler.schedulers.background import BackgroundScheduler
 import os
 
-# Global component instances
+# Global components
 wallet_manager = None
 chain_scanner = None
 decision_engine = None
@@ -11,16 +11,16 @@ transaction_executor = None
 contract_manager = None
 
 def init_app_components():
-    """Initialize all components"""
+    """Initialize application components"""
     global wallet_manager, chain_scanner, decision_engine, transaction_executor, contract_manager
     
-    from wallet_manager import WalletManager
-    from chain_scanner import ChainScanner
-    from decision_engine import DecisionEngine
-    from transaction_executor import TransactionExecutor
-    from contract_manager import ContractManager
-    
     try:
+        from wallet_manager import WalletManager
+        from chain_scanner import ChainScanner
+        from decision_engine import DecisionEngine
+        from transaction_executor import TransactionExecutor
+        from contract_manager import ContractManager
+        
         wallet_manager = WalletManager()
         chain_scanner = ChainScanner()
         decision_engine = DecisionEngine()
@@ -32,8 +32,6 @@ def init_app_components():
         return False
 
 def configure_routes(app):
-    """Configure all application routes"""
-    
     @app.route('/')
     def index():
         return render_template('index.html')
@@ -45,6 +43,10 @@ def configure_routes(app):
     @app.route('/contracts')
     def contracts_page():
         return render_template('contracts.html')
+
+    @app.route('/risk-parameters')
+    def risk_parameters():
+        return render_template('risk_parameters.html')
 
     @app.route('/api/contracts/compile', methods=['POST'])
     def compile_contract():
@@ -202,42 +204,113 @@ def configure_routes(app):
             'chain_id': tx.chain_id
         } for tx in transactions])
 
+    @app.route('/api/risk-parameters', methods=['GET'])
+    def get_risk_parameters():
+        """Get all active risk parameters"""
+        try:
+            params = RiskParameter.query.filter_by(active=True).all()
+            return jsonify([{
+                'id': param.id,
+                'parameter_type': param.parameter_type,
+                'value': param.value,
+                'min_value': param.min_value,
+                'max_value': param.max_value,
+                'default_value': param.default_value,
+                'description': param.description
+            } for param in params])
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/api/risk-parameters/<int:param_id>', methods=['PUT'])
+    def update_risk_parameter(param_id):
+        """Update a risk parameter value"""
+        try:
+            data = request.get_json()
+            if 'value' not in data:
+                return jsonify({"error": "Missing value field"}), 400
+
+            param = RiskParameter.query.get(param_id)
+            if not param:
+                return jsonify({"error": "Parameter not found"}), 404
+
+            # Validate new value
+            new_value = float(data['value'])
+            if new_value < param.min_value or new_value > param.max_value:
+                return jsonify({
+                    "error": f"Value must be between {param.min_value} and {param.max_value}"
+                }), 400
+
+            param.value = new_value
+            db.session.commit()
+
+            return jsonify({
+                "success": True,
+                "message": f"Updated {param.parameter_type} to {new_value}"
+            })
+        except ValueError:
+            return jsonify({"error": "Invalid value format"}), 400
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/api/risk-parameters/<int:param_id>/reset', methods=['POST'])
+    def reset_risk_parameter(param_id):
+        """Reset a risk parameter to its default value"""
+        try:
+            param = RiskParameter.query.get(param_id)
+            if not param:
+                return jsonify({"error": "Parameter not found"}), 404
+
+            param.value = param.default_value
+            db.session.commit()
+
+            return jsonify({
+                "success": True,
+                "message": f"Reset {param.parameter_type} to default value {param.default_value}"
+            })
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": str(e)}), 500
+
     def run_ai_cycle():
         """Execute one cycle of the AI agent's decision-making process across all chains"""
-        global app
-        
-        if not all([chain_scanner, decision_engine, transaction_executor]):
-            print("Components not initialized")
-            return
+        with app.app_context():
+            if not all([chain_scanner, decision_engine, transaction_executor]):
+                print("Components not initialized")
+                return
 
-        try:
-            # Get all active chains
-            active_chains = Chain.query.filter_by(active=True).all()
-            
-            for chain in active_chains:
-                try:
-                    # Switch to current chain
-                    chain_scanner.switch_chain(chain.id)
-                    transaction_executor.switch_chain(chain.id)
-                    
-                    # Scan chain data
-                    chain_data = chain_scanner.scan_latest_data()
-                    
-                    # Get AI decision
-                    decision = decision_engine.make_decision(chain_data)
-                    
-                    # Execute transaction if needed
-                    if decision.should_execute:
-                        transaction_executor.execute_transaction(decision.transaction_data)
-                        
-                except Exception as chain_error:
-                    print(f"Error processing chain {chain.name}: {str(chain_error)}")
-                    continue
+            try:
+                # Get all active chains
+                active_chains = Chain.query.filter_by(active=True).all()
                 
-        except Exception as e:
-            print(f"Error in AI cycle: {str(e)}")
+                for chain in active_chains:
+                    try:
+                        # Switch to current chain
+                        chain_scanner.switch_chain(chain.id)
+                        transaction_executor.switch_chain(chain.id)
+                        
+                        # Scan chain data
+                        chain_data = chain_scanner.scan_latest_data()
+                        
+                        # Get AI decision
+                        decision = decision_engine.make_decision(chain_data)
+                        
+                        # Execute transaction if needed and passes risk validation
+                        if decision.should_execute:
+                            # Validate against risk parameters before execution
+                            if transaction_executor._validate_risk_parameters(decision.transaction_data):
+                                transaction_executor.execute_transaction(decision.transaction_data)
+                            else:
+                                print("Transaction rejected: Failed risk parameter validation")
+                            
+                    except Exception as chain_error:
+                        print(f"Error processing chain {chain.name}: {str(chain_error)}")
+                        continue
+                    
+            except Exception as e:
+                print(f"Error in AI cycle: {str(e)}")
 
-    # Initialize scheduler
+    # Initialize scheduler with app context
     scheduler = BackgroundScheduler()
     scheduler.add_job(run_ai_cycle, 'interval', minutes=5)
     scheduler.start()

@@ -68,3 +68,15 @@ class Contract(db.Model):
     __table_args__ = (
         db.UniqueConstraint('address', 'chain_id', name='uq_contract_address_chain'),
     )
+
+class RiskParameter(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    parameter_type = db.Column(db.String(50), nullable=False)
+    value = db.Column(db.Float, nullable=False)
+    min_value = db.Column(db.Float, nullable=False)
+    max_value = db.Column(db.Float, nullable=False)
+    default_value = db.Column(db.Float, nullable=False)
+    description = db.Column(db.Text)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
