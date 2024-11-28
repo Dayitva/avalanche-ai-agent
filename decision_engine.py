@@ -1,6 +1,6 @@
 import requests
 from datetime import datetime
-from models import AIDecision, db
+from base_models import AIDecision, db
 from memory_manager import MemoryManager
 
 class DecisionEngine:

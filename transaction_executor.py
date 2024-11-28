@@ -1,13 +1,18 @@
 from web3 import Web3
-from models import Transaction, db
+from base_models import Transaction, db
 from memory_manager import MemoryManager
 from datetime import datetime
 
 class TransactionExecutor:
     def __init__(self, wallet_manager):
-        self.w3 = Web3(Web3.HTTPProvider('https://api.avax.network/ext/bc/C/rpc'))
+        """Initialize transaction executor with wallet manager"""
         self.wallet_manager = wallet_manager
         self.memory_manager = MemoryManager()
+        self.w3 = Web3(Web3.HTTPProvider(self.wallet_manager.chain.rpc_url))
+    def switch_chain(self, chain_id):
+        """Switch to a different chain"""
+        self.wallet_manager.switch_chain(chain_id)
+        self.w3 = Web3(Web3.HTTPProvider(self.wallet_manager.chain.rpc_url))
         
     def execute_transaction(self, transaction_data):
         """Execute a transaction based on AI decision"""
@@ -54,7 +59,7 @@ class TransactionExecutor:
             'to': Web3.to_checksum_address(transaction_data['to']),
             'value': transaction_data.get('value', 0),
             'data': transaction_data.get('data', ''),
-            'chainId': 43114  # Avalanche C-Chain
+            'chainId': self.wallet_manager.chain.network_id
         }
         
     def _estimate_gas(self, transaction_data):
@@ -76,7 +81,8 @@ class TransactionExecutor:
             amount=self.w3.from_wei(transaction_data.get('value', 0), 'ether'),
             status='success',
             gas_used=receipt['gasUsed'],
-            details=transaction_data
+            details=transaction_data,
+            chain_id=self.wallet_manager.chain_id
         )
         
         db.session.add(transaction)
@@ -89,7 +95,8 @@ class TransactionExecutor:
             type=transaction_data['type'],
             amount=self.w3.from_wei(transaction_data.get('value', 0), 'ether'),
             status='failed',
-            details={'error': str(error), **transaction_data}
+            details={'error': str(error), **transaction_data},
+            chain_id=self.wallet_manager.chain_id
         )
         
         db.session.add(transaction)

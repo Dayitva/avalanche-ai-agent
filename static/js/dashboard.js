@@ -1,12 +1,30 @@
-// Update wallet balance
-function updateWalletBalance() {
-    fetch('/api/wallet/balance')
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('wallet-balance').textContent = 
-                parseFloat(data.balance).toFixed(4);
-        })
-        .catch(error => console.error('Error fetching balance:', error));
+// Update wallet balances for all chains
+async function updateWalletBalances() {
+    try {
+        // Get supported chains
+        const chainsResponse = await fetch('/api/wallet/chains');
+        const chains = await chainsResponse.json();
+        
+        // Create or update balance elements for each chain
+        const balanceContainer = document.getElementById('wallet-balances');
+        balanceContainer.innerHTML = ''; // Clear existing balances
+        
+        for (const chain of chains) {
+            const balanceResponse = await fetch(`/api/wallet/balance/${chain.id}`);
+            const balanceData = await balanceResponse.json();
+            
+            const balanceElement = document.createElement('div');
+            balanceElement.className = 'mb-3';
+            balanceElement.innerHTML = `
+                <h6 class="text-muted">${chain.name}</h6>
+                <h3 class="mb-0">${parseFloat(balanceData.balance).toFixed(4)}</h3>
+                <small class="text-muted">${chain.symbol}</small>
+            `;
+            balanceContainer.appendChild(balanceElement);
+        }
+    } catch (error) {
+        console.error('Error updating balances:', error);
+    }
 }
 
 // Update recent transactions
@@ -75,13 +93,13 @@ function initializeChart() {
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {
-    updateWalletBalance();
+    updateWalletBalances();
     updateTransactions();
     initializeChart();
     
     // Refresh data every 30 seconds
     setInterval(() => {
-        updateWalletBalance();
+        updateWalletBalances();
         updateTransactions();
     }, 30000);
 });

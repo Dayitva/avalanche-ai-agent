@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import desc
-from models import Memory, db
+from base_models import Memory, db
 import json
 
 class MemoryManager:

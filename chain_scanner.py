@@ -1,14 +1,51 @@
 from web3 import Web3
 import json
 import requests
+from flask import current_app
 
 class ChainScanner:
-    def __init__(self):
-        self.w3 = Web3(Web3.HTTPProvider('https://api.avax.network/ext/bc/C/rpc'))
-        self.yield_contracts = {
-            'aave': '0x4F01AeD16D97E3aB5ab2B501154DC9bb0F1A5A2C',
-            'benqi': '0x486Af39519B4Dc9a7fCcd318217352830E8AD9b4',
-        }
+    def __init__(self, chain_id=None):
+        """Initialize chain scanner with optional chain_id"""
+        from flask import current_app
+        
+        with current_app.app_context():
+            self.chain_id = chain_id
+            self.chain = self._get_chain_info(chain_id)
+            self.w3 = Web3(Web3.HTTPProvider(self.chain.rpc_url))
+            # Define yield contracts per chain
+            self.yield_contracts = {
+                43114: {  # Avalanche C-Chain
+                    'aave': '0x4F01AeD16D97E3aB5ab2B501154DC9bb0F1A5A2C',
+                    'benqi': '0x486Af39519B4Dc9a7fCcd318217352830E8AD9b4',
+                },
+                43113: {  # Avalanche Fuji
+                    'aave': '0x4F01AeD16D97E3aB5ab2B501154DC9bb0F1A5A2C',
+                    'benqi': '0x486Af39519B4Dc9a7fCcd318217352830E8AD9b4',
+                }
+            }
+        
+    def _initialize_chain(self):
+        """Initialize chain connection"""
+        with current_app.app_context():
+            self.chain = self._get_chain_info(self.chain_id)
+            self.w3 = Web3(Web3.HTTPProvider(self.chain.rpc_url))
+        
+    def switch_chain(self, chain_id):
+        """Switch to a different chain"""
+        self.chain_id = chain_id
+        self._initialize_chain()
+        
+    def _get_chain_info(self, chain_id):
+        """Get chain information from database"""
+        from base_models import Chain
+        if chain_id:
+            chain = Chain.query.get(chain_id)
+        else:
+            chain = Chain.query.filter_by(name='Avalanche C-Chain').first()
+        
+        if not chain:
+            raise ValueError("Chain not found")
+        return chain
         
     def scan_latest_data(self):
         """Scan latest blockchain data for yield opportunities"""
@@ -24,7 +61,8 @@ class ChainScanner:
         """Get current yield rates from various protocols"""
         yields = {}
         
-        for protocol, contract in self.yield_contracts.items():
+        chain_contracts = self.yield_contracts.get(self.chain.network_id, {})
+        for protocol, contract in chain_contracts.items():
             try:
                 # This is a simplified example - actual implementation would need
                 # protocol-specific ABI and logic
