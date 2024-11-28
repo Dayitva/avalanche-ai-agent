@@ -1,5 +1,15 @@
-from flask import current_app
-from base_models import Chain, db
+from base_models import Chain, db, init_db
+from flask import Flask
+import os
+
+def create_app():
+    """Create and configure Flask application"""
+    app = Flask(__name__)
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SECRET_KEY'] = os.environ.get('WALLET_ENCRYPTION_KEY', 'dev-key')
+    init_db(app)
+    return app
 
 def initialize_default_chains():
     """Initialize default blockchain networks"""
@@ -35,14 +45,10 @@ def initialize_default_chains():
             
     except Exception as e:
         print(f"Error initializing default chains: {str(e)}")
+        db.session.rollback()
         raise
 
 if __name__ == "__main__":
-    try:
-        # When run directly, create app context
-        from app import app
-        with app.app_context():
-            initialize_default_chains()
-    except Exception as e:
-        print(f"Failed to initialize chains: {str(e)}")
-        exit(1)
+    app = create_app()
+    with app.app_context():
+        initialize_default_chains()
