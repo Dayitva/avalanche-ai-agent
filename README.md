@@ -103,7 +103,7 @@ RiskParameter       # Risk control parameters
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/avalanche-ai-agent.git
+git clone https://github.com/replit/avalanche-ai-agent.git
 cd avalanche-ai-agent
 ```
 
